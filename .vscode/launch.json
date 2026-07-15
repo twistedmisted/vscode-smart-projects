@@ -1,0 +1,32 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run Extension",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}"
+      ],
+      "outFiles": ["${workspaceFolder}/out/**/*.js"],
+      "preLaunchTask": "${defaultBuildTask}"
+    },
+    {
+      "name": "Run Extension (Second Window)",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "${workspaceFolder}/..",
+        "--extensionDevelopmentPath=${workspaceFolder}",
+        "--userDataDir=${workspaceFolder}/.vscode-test/user-data-2"
+      ],
+      "outFiles": ["${workspaceFolder}/out/**/*.js"]
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Run Two Windows",
+      "configurations": ["Run Extension", "Run Extension (Second Window)"]
+    }
+  ]
+}

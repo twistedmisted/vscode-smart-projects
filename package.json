@@ -1,0 +1,373 @@
+{
+  "name": "smart-projects",
+  "displayName": "Smart Projects",
+  "description": "Displays currently open VS Code projects in the Status Bar and allows quick switching between them.",
+  "version": "0.1.0",
+  "publisher": "andriimishchenko",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "Smart Projects",
+      "properties": {
+        "smartProjects.displayMode": {
+          "type": "string",
+          "default": "quickPick",
+          "enum": ["quickPick", "treeView", "panel", "statusBar"],
+          "enumDescriptions": [
+            "Show projects in a QuickPick dropdown at the top of the window (default)",
+            "Show projects in a dedicated sidebar Tree View panel",
+            "Show projects in the bottom Panel area (next to Terminal, Output, etc.)",
+            "Show each open project as a separate clickable item in the Status Bar"
+          ],
+          "description": "Controls where the list of open projects is displayed when clicking the Status Bar item."
+        },
+        "smartProjects.customColors": {
+          "type": "object",
+          "default": {},
+          "description": "Custom color overrides for specific projects. Maps project absolute paths to ThemeColor strings."
+        },
+        "smartProjects.pinnedProjects": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "List of pinned project absolute paths."
+        },
+        "smartProjects.projectTags": {
+          "type": "object",
+          "default": {},
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "description": "Custom tags for projects (key: absolute path, value: array of tag names)."
+        },
+        "smartProjects.showGitStatus": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the current Git branch and uncommitted changes indicator next to projects."
+        },
+        "smartProjects.scanDirectories": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Directories to recursively scan for projects (max depth 3). Projects will appear in the Discovered Projects panel."
+        },
+        "smartProjects.ignoredProjects": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "A list of project absolute paths that should be completely ignored by the extension (won't appear in Open, Recent, or Discovered lists)."
+        }
+      }
+    },
+    "submenus": [
+      {
+        "id": "smartProjects.settingsMenu",
+        "label": "Settings",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "id": "smartProjects.positionMenu",
+        "label": "Status Bar Display"
+      }
+    ],
+    "commands": [
+      {
+        "command": "smartProjects.showProjects",
+        "title": "Smart Projects: Show Open Projects"
+      },
+      {
+        "command": "smartProjects.openProject",
+        "title": "Open Project in New Window",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "smartProjects.openNewProject",
+        "title": "Open New Project...",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "smartProjects.setProjectTag",
+        "title": "Set Project Tag",
+        "icon": "$(tag)"
+      },
+      {
+        "command": "smartProjects.removeProjectTag",
+        "title": "Remove Tag",
+        "icon": "$(close)"
+      },
+      {
+        "command": "smartProjects.openRecentCurrentWindow",
+        "title": "Open in Current Window",
+        "icon": "$(window)"
+      },
+      {
+        "command": "smartProjects.openRecentNewWindow",
+        "title": "Open in New Window",
+        "icon": "$(empty-window)"
+      },
+      {
+        "command": "smartProjects.refreshProjects",
+        "title": "Refresh",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "smartProjects.addScanDirectory",
+        "title": "Add Scan Directory",
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "smartProjects.setProjectColor",
+        "title": "Set Project Color",
+        "icon": "$(symbol-color)"
+      },
+      {
+        "command": "smartProjects.forgetProject",
+        "title": "Forget Project",
+        "icon": "$(close)"
+      },
+      {
+        "command": "smartProjects.unforgetProject",
+        "title": "Unforget Project",
+        "icon": "$(reply)"
+      },
+      {
+        "command": "smartProjects.filterByTag",
+        "title": "Filter by Tag",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "smartProjects.pinProject",
+        "title": "Pin Project",
+        "icon": "$(pin)"
+      },
+      {
+        "command": "smartProjects.unpinProject",
+        "title": "Unpin Project",
+        "icon": "$(pinned)"
+      },
+      {
+        "command": "smartProjects.setDisplayMode.quickPick.active",
+        "title": "✓ Grouped Button (Quick Pick)"
+      },
+      {
+        "command": "smartProjects.setDisplayMode.quickPick.inactive",
+        "title": "  Grouped Button (Quick Pick)"
+      },
+      {
+        "command": "smartProjects.setDisplayMode.statusBar.active",
+        "title": "✓ Inline Items"
+      },
+      {
+        "command": "smartProjects.setDisplayMode.statusBar.inactive",
+        "title": "  Inline Items"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "smartProjects",
+          "title": "Smart Projects",
+          "icon": "$(window)"
+        }
+      ],
+      "panel": [
+        {
+          "id": "smartProjectsPanel",
+          "title": "Smart Projects",
+          "icon": "$(window)"
+        }
+      ]
+    },
+    "views": {
+      "smartProjects": [
+        {
+          "id": "smartProjects.projectList",
+          "name": "Open Projects"
+        },
+        {
+          "id": "smartProjects.recentProjects",
+          "name": "Recent Projects"
+        },
+        {
+          "id": "smartProjects.discoveredProjects",
+          "name": "Discovered Projects"
+        },
+        {
+          "id": "smartProjects.ignoredProjects",
+          "name": "Ignored Projects",
+          "when": "smartProjects:hasIgnoredProjects"
+        }
+      ],
+      "smartProjectsPanel": [
+        {
+          "id": "smartProjects.projectListPanel",
+          "name": "Open Projects"
+        },
+        {
+          "id": "smartProjects.recentProjectsPanel",
+          "name": "Recent Projects"
+        },
+        {
+          "id": "smartProjects.discoveredProjectsPanel",
+          "name": "Discovered Projects"
+        },
+        {
+          "id": "smartProjects.ignoredProjectsPanel",
+          "name": "Ignored Projects",
+          "when": "smartProjects:hasIgnoredProjects"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "smartProjects.discoveredProjects",
+        "contents": "The extension can automatically find projects on your computer.\n\n[$(new-folder) Add Scan Directory](command:smartProjects.addScanDirectory)"
+      },
+      {
+        "view": "smartProjects.discoveredProjectsPanel",
+        "contents": "The extension can automatically find projects on your computer.\n\n[$(new-folder) Add Scan Directory](command:smartProjects.addScanDirectory)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "smartProjects.openNewProject",
+          "when": "view == smartProjects.projectList || view == smartProjects.projectListPanel",
+          "group": "navigation@0"
+        },
+        {
+          "command": "smartProjects.addScanDirectory",
+          "when": "view == smartProjects.discoveredProjects || view == smartProjects.discoveredProjectsPanel",
+          "group": "navigation@1"
+        },
+        {
+          "command": "smartProjects.refreshProjects",
+          "when": "view == smartProjects.projectList || view == smartProjects.projectListPanel || view == smartProjects.discoveredProjects || view == smartProjects.discoveredProjectsPanel",
+          "group": "navigation@3"
+        },
+        {
+          "command": "smartProjects.filterByTag",
+          "when": "view == smartProjects.projectList || view == smartProjects.projectListPanel || view == smartProjects.recentProjects || view == smartProjects.recentProjectsPanel",
+          "group": "navigation@4"
+        },
+        {
+          "submenu": "smartProjects.settingsMenu",
+          "when": "view == smartProjects.projectList || view == smartProjects.projectListPanel",
+          "group": "navigation@5"
+        }
+      ],
+      "smartProjects.settingsMenu": [
+        {
+          "submenu": "smartProjects.positionMenu",
+          "group": "1_position"
+        }
+      ],
+      "smartProjects.positionMenu": [
+        {
+          "command": "smartProjects.setDisplayMode.quickPick.active",
+          "when": "config.smartProjects.displayMode == 'quickPick'",
+          "group": "1_modes@1"
+        },
+        {
+          "command": "smartProjects.setDisplayMode.quickPick.inactive",
+          "when": "config.smartProjects.displayMode != 'quickPick'",
+          "group": "1_modes@1"
+        },
+        {
+          "command": "smartProjects.setDisplayMode.statusBar.active",
+          "when": "config.smartProjects.displayMode == 'statusBar'",
+          "group": "1_modes@2"
+        },
+        {
+          "command": "smartProjects.setDisplayMode.statusBar.inactive",
+          "when": "config.smartProjects.displayMode != 'statusBar'",
+          "group": "1_modes@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "smartProjects.openProject",
+          "when": "viewItem == smartProjectsItem || viewItem == smartProjectsItemPinned",
+          "group": "inline@1"
+        },
+        {
+          "command": "smartProjects.pinProject",
+          "when": "viewItem == smartProjectsItem",
+          "group": "inline@2"
+        },
+        {
+          "command": "smartProjects.unpinProject",
+          "when": "viewItem == smartProjectsItemPinned",
+          "group": "inline@2"
+        },
+        {
+          "command": "smartProjects.setProjectColor",
+          "when": "viewItem == smartProjectsItem || viewItem == smartProjectsItemPinned || viewItem == discoveredProjectSelectorItem || viewItem == discoveredProjectSelectorItemPinned",
+          "group": "1_modification@1"
+        },
+        {
+          "command": "smartProjects.setProjectTag",
+          "when": "viewItem == smartProjectsItem || viewItem == smartProjectsItemPinned || viewItem == recentProjectSelectorItem",
+          "group": "1_modification@2"
+        },
+        {
+          "command": "smartProjects.removeProjectTag",
+          "when": "viewItem == smartProjectsItem || viewItem == smartProjectsItemPinned || viewItem == recentProjectSelectorItem",
+          "group": "1_modification@3"
+        },
+        {
+          "command": "smartProjects.setProjectTag",
+          "when": "viewItem == smartProjectsItem || viewItem == smartProjectsItemPinned || viewItem == recentProjectSelectorItem",
+          "group": "inline@3"
+        },
+        {
+          "command": "smartProjects.forgetProject",
+          "when": "viewItem == smartProjectsItem || viewItem == smartProjectsItemPinned || viewItem == recentProjectSelectorItem",
+          "group": "inline@4"
+        },
+        {
+          "command": "smartProjects.unforgetProject",
+          "when": "viewItem == ignoredProjectSelectorItem",
+          "group": "inline@1"
+        },
+        {
+          "command": "smartProjects.openRecentCurrentWindow",
+          "when": "viewItem == recentProjectSelectorItem || viewItem == discoveredProjectSelectorItem || viewItem == discoveredProjectSelectorItemPinned",
+          "group": "inline@1"
+        },
+        {
+          "command": "smartProjects.openRecentNewWindow",
+          "when": "viewItem == recentProjectSelectorItem || viewItem == discoveredProjectSelectorItem || viewItem == discoveredProjectSelectorItemPinned",
+          "group": "inline@2"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "^20.11.0",
+    "typescript": "^5.3.3"
+  }
+}
