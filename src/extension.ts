@@ -19,6 +19,33 @@ interface ProjectEntry {
   gitBranch?: string;
   /** True if the repository has uncommitted changes */
   gitDirty?: boolean;
+  /** True if another instance requested this project to close */
+  closeRequested?: boolean;
+  /** The detected primary language extension of the project (e.g. ts, java) */
+  language?: string;
+}
+
+function detectProjectLanguage(dir: string): string | undefined {
+  try {
+    const files = fs.readdirSync(dir);
+    if (files.includes("pom.xml") || files.includes("build.gradle")) return "java";
+    if (files.includes("tsconfig.json")) return "ts";
+    if (files.includes("package.json")) return "js";
+    if (files.includes("requirements.txt") || files.includes("pyproject.toml") || files.includes("Pipfile")) return "py";
+    if (files.includes("go.mod")) return "go";
+    if (files.includes("Cargo.toml")) return "rs";
+    if (files.some(f => f.endsWith(".sln") || f.endsWith(".csproj"))) return "cs";
+    if (files.includes("composer.json")) return "php";
+    if (files.includes("Gemfile")) return "rb";
+    if (files.includes("CMakeLists.txt")) return "cpp";
+    if (files.includes("Makefile") && files.some(f => f.endsWith(".c") || f.endsWith(".cpp"))) return "c";
+    if (files.includes("pubspec.yaml")) return "dart";
+    if (files.includes("mix.exs")) return "ex";
+    if (files.includes("build.sbt")) return "scala";
+    if (files.includes("main.go")) return "go";
+  } catch {
+  }
+  return undefined;
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -51,6 +78,8 @@ let projectTreeProvider: ProjectTreeDataProvider;
 let recentProjectTreeProvider: RecentProjectTreeDataProvider;
 let discoveredProjectTreeProvider: DiscoveredProjectTreeDataProvider;
 let ignoredProjectTreeProvider: IgnoredProjectTreeDataProvider;
+
+let closeCheckTimer: NodeJS.Timeout | undefined;
 
 let sidebarTreeView: vscode.TreeView<vscode.TreeItem>;
 let panelTreeView: vscode.TreeView<vscode.TreeItem>;
@@ -310,6 +339,7 @@ async function scanForProjects(dirs: string[], maxDepth = 3): Promise<ProjectEnt
           absolutePath: dir,
           displayName: path.basename(dir),
           lastSeen: 0,
+          language: detectProjectLanguage(dir)
         });
         return;
       }
@@ -618,7 +648,7 @@ async function handleFilterByTag(): Promise<void> {
   recentProjectTreeProvider?.refresh();
 }
 
-type DisplayMode = "quickPick" | "treeView" | "panel" | "statusBar";
+type DisplayMode = "quickPick" | "treeView" | "panel" | "statusBar" | "statusBarTags";
 
 /**
  * Reads the user's chosen display mode from settings.
@@ -694,12 +724,20 @@ async function registerCurrentWorkspace(): Promise<void> {
   const now = Date.now();
   const idx = entries.findIndex((e) => e.absolutePath === wsPath);
 
+  if (idx !== -1 && entries[idx].closeRequested) {
+    vscode.commands.executeCommand("workbench.action.closeWindow");
+    return;
+  }
+
+  const language = detectProjectLanguage(wsPath);
+
   if (idx !== -1) {
     // Already tracked — just bump the heartbeat.
     entries[idx].lastSeen = now;
     entries[idx].displayName = getWorkspaceName();
     entries[idx].gitBranch = gitBranch;
     entries[idx].gitDirty = gitDirty;
+    entries[idx].language = language;
   } else {
     // New entry.
     entries.push({
@@ -707,7 +745,8 @@ async function registerCurrentWorkspace(): Promise<void> {
       displayName: getWorkspaceName(),
       lastSeen: now,
       gitBranch,
-      gitDirty
+      gitDirty,
+      language
     });
   }
 
@@ -721,13 +760,15 @@ async function registerCurrentWorkspace(): Promise<void> {
     recent[recentIdx].displayName = getWorkspaceName();
     recent[recentIdx].gitBranch = gitBranch;
     recent[recentIdx].gitDirty = gitDirty;
+    recent[recentIdx].language = language;
   } else {
     recent.push({
       absolutePath: wsPath,
       displayName: getWorkspaceName(),
       lastSeen: now,
       gitBranch,
-      gitDirty
+      gitDirty,
+      language
     });
   }
   // Keep only the 20 most recent
@@ -802,10 +843,18 @@ class ProjectTreeItem extends vscode.TreeItem {
 
     // Visual indicator: current project gets a filled-circle icon,
     // others get a window icon. Both get the consistent deterministic color!
-    const projectColor = getProjectColor(entry.displayName, entry.absolutePath);
-    this.iconPath = isCurrent
-      ? new vscode.ThemeIcon("circle-filled", projectColor)
-      : new vscode.ThemeIcon("window", projectColor);
+    const config = vscode.workspace.getConfiguration("smartProjects");
+    const useLanguageIcons = config.get<boolean>("useLanguageIcons", true);
+
+    if (useLanguageIcons && entry.language) {
+      this.resourceUri = vscode.Uri.file(path.join(entry.absolutePath, "project." + entry.language));
+    } else {
+      const projectColor = getProjectColor(entry.displayName, entry.absolutePath);
+      const hasGit = entry.gitBranch !== undefined || fs.existsSync(path.join(entry.absolutePath, ".git"));
+      this.iconPath = isCurrent
+        ? new vscode.ThemeIcon("circle-filled", projectColor)
+        : (hasGit ? new vscode.ThemeIcon("repo", projectColor) : new vscode.ThemeIcon("window", projectColor));
+    }
   }
 }
 
@@ -903,9 +952,16 @@ class RecentProjectTreeItem extends vscode.TreeItem {
       arguments: [this],
     };
 
-    // Grayed out folder icon or window icon
-    const projectColor = getProjectColor(entry.displayName, entry.absolutePath);
-    this.iconPath = new vscode.ThemeIcon("history", projectColor);
+    const config = vscode.workspace.getConfiguration("smartProjects");
+    const useLanguageIcons = config.get<boolean>("useLanguageIcons", true);
+
+    if (useLanguageIcons && entry.language) {
+      this.resourceUri = vscode.Uri.file(path.join(entry.absolutePath, "project." + entry.language));
+    } else {
+      const projectColor = getProjectColor(entry.displayName, entry.absolutePath);
+      const hasGit = entry.gitBranch !== undefined || fs.existsSync(path.join(entry.absolutePath, ".git"));
+      this.iconPath = hasGit ? new vscode.ThemeIcon("repo", projectColor) : new vscode.ThemeIcon("history", projectColor);
+    }
   }
 }
 
@@ -980,8 +1036,16 @@ class DiscoveredProjectTreeItem extends vscode.TreeItem {
       arguments: [this],
     };
 
-    const projectColor = getProjectColor(entry.displayName, entry.absolutePath);
-    this.iconPath = new vscode.ThemeIcon("telescope", projectColor);
+    const config = vscode.workspace.getConfiguration("smartProjects");
+    const useLanguageIcons = config.get<boolean>("useLanguageIcons", true);
+
+    if (useLanguageIcons && entry.language) {
+      this.resourceUri = vscode.Uri.file(path.join(entry.absolutePath, "project." + entry.language));
+    } else {
+      const projectColor = getProjectColor(entry.displayName, entry.absolutePath);
+      const hasGit = entry.gitBranch !== undefined || fs.existsSync(path.join(entry.absolutePath, ".git"));
+      this.iconPath = hasGit ? new vscode.ThemeIcon("repo", projectColor) : new vscode.ThemeIcon("telescope", projectColor);
+    }
   }
 }
 
@@ -1013,8 +1077,16 @@ class IgnoredProjectTreeItem extends vscode.TreeItem {
     this.description = "Ignored";
     this.contextValue = "ignoredProjectSelectorItem";
 
-    const projectColor = getProjectColor(entry.displayName, entry.absolutePath);
-    this.iconPath = new vscode.ThemeIcon("eye-closed", projectColor);
+    const config = vscode.workspace.getConfiguration("smartProjects");
+    const useLanguageIcons = config.get<boolean>("useLanguageIcons", true);
+
+    if (useLanguageIcons && entry.language) {
+      this.resourceUri = vscode.Uri.file(path.join(entry.absolutePath, "project." + entry.language));
+    } else {
+      const projectColor = getProjectColor(entry.displayName, entry.absolutePath);
+      const hasGit = entry.gitBranch !== undefined || fs.existsSync(path.join(entry.absolutePath, ".git"));
+      this.iconPath = hasGit ? new vscode.ThemeIcon("repo", projectColor) : new vscode.ThemeIcon("eye-closed", projectColor);
+    }
   }
 }
 
@@ -1044,7 +1116,8 @@ class IgnoredProjectTreeDataProvider implements vscode.TreeDataProvider<vscode.T
       const entry: ProjectEntry = {
         absolutePath: p,
         displayName: pathModule.basename(p),
-        lastSeen: 0
+        lastSeen: 0,
+        language: detectProjectLanguage(p)
       };
       return new IgnoredProjectTreeItem(entry);
     });
@@ -1057,10 +1130,20 @@ class IgnoredProjectTreeDataProvider implements vscode.TreeDataProvider<vscode.T
  * Shows a QuickPick dropdown listing every project currently tracked in the
  * shared state file.  Selecting an item opens that folder in a **new window**.
  */
-async function showProjectPicker(): Promise<void> {
-  const entries = getFreshEntries();
-  const recentEntries = getFreshRecentEntries();
-  const discoveredEntries = getFreshDiscoveredEntries();
+async function showProjectPicker(filterTag?: string): Promise<void> {
+  let entries = getFreshEntries();
+  let recentEntries = getFreshRecentEntries();
+  let discoveredEntries = getFreshDiscoveredEntries();
+
+  if (filterTag) {
+    const filterFn = (e: ProjectEntry) => {
+      const tags = getProjectTags(e.absolutePath);
+      return filterTag === "Untagged" ? tags.length === 0 : tags.includes(filterTag);
+    };
+    entries = entries.filter(filterFn);
+    recentEntries = recentEntries.filter(filterFn);
+    discoveredEntries = discoveredEntries.filter(filterFn);
+  }
 
   if (entries.length === 0 && recentEntries.length === 0 && discoveredEntries.length === 0) {
     vscode.window.showInformationMessage(
@@ -1260,6 +1343,39 @@ function clearDynamicStatusBarItems(): void {
 function syncStatusBarItems(): void {
   clearDynamicStatusBarItems();
 
+  const mode = getDisplayMode();
+  if (mode === "statusBarTags") {
+    const entries = getFreshEntries();
+    const tagsSet = new Set<string>();
+    let hasUntagged = false;
+
+    entries.forEach(entry => {
+      const tags = getProjectTags(entry.absolutePath);
+      if (tags.length === 0) hasUntagged = true;
+      else tags.forEach(t => tagsSet.add(t));
+    });
+
+    const tags = Array.from(tagsSet).sort();
+    if (hasUntagged) tags.push("Untagged");
+
+    tags.forEach((tag, index) => {
+      const item = vscode.window.createStatusBarItem(
+        vscode.StatusBarAlignment.Right,
+        99 - index
+      );
+      item.text = `$(tag) ${tag}`;
+      item.tooltip = `Show projects for tag: ${tag}`;
+      item.command = {
+        command: "smartProjects.showProjectsByTag",
+        title: "Show Projects by Tag",
+        arguments: [tag]
+      };
+      item.show();
+      dynamicStatusBarItems.push(item);
+    });
+    return;
+  }
+
   const entries = getFreshEntries();
   const currentPath = getWorkspacePath();
 
@@ -1323,8 +1439,8 @@ async function handleShowProjects(): Promise<void> {
     await vscode.commands.executeCommand(
       "smartProjects.projectListPanel.focus"
     );
-  } else if (mode === "statusBar") {
-    // In statusBar mode, items are always visible; clicking the main button
+  } else if (mode === "statusBar" || mode === "statusBarTags") {
+    // In statusBar modes, items are always visible; clicking the main button
     // just forces a refresh.
     syncStatusBarItems();
   } else {
@@ -1388,7 +1504,7 @@ export function activate(context: vscode.ExtensionContext): void {
   statusBarItem.tooltip = "Show open projects";
   statusBarItem.command = "smartProjects.showProjects";
   
-  if (getDisplayMode() !== "statusBar") {
+  if (getDisplayMode() !== "statusBar" && getDisplayMode() !== "statusBarTags") {
     statusBarItem.show();
   }
   context.subscriptions.push(statusBarItem);
@@ -1503,6 +1619,12 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand(
       "smartProjects.addScanDirectory",
       handleAddScanDirectory
+    ),
+    vscode.commands.registerCommand(
+      "smartProjects.showProjectsByTag",
+      (tag?: string) => {
+        if (tag) showProjectPicker(tag);
+      }
     )
   );
 
@@ -1644,6 +1766,24 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand(
       "smartProjects.unforgetProject",
       handleUnforgetProject
+    ),
+    vscode.commands.registerCommand(
+      "smartProjects.closeProject",
+      async (arg?: ProjectTreeItem) => {
+        if (!arg) return;
+        const targetPath = arg.entry.absolutePath;
+        if (targetPath === getWorkspacePath()) {
+          vscode.commands.executeCommand("workbench.action.closeWindow");
+        } else {
+          let state = readState();
+          const index = state.findIndex(p => p.absolutePath === targetPath);
+          if (index !== -1) {
+            state[index].closeRequested = true;
+            writeState(state);
+            vscode.window.showInformationMessage(`Sent close request to ${arg.entry.displayName}...`);
+          }
+        }
+      }
     )
   );
 
@@ -1689,7 +1829,9 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("smartProjects.setDisplayMode.quickPick.active", () => setDisplayMode("quickPick")),
     vscode.commands.registerCommand("smartProjects.setDisplayMode.quickPick.inactive", () => setDisplayMode("quickPick")),
     vscode.commands.registerCommand("smartProjects.setDisplayMode.statusBar.active", () => setDisplayMode("statusBar")),
-    vscode.commands.registerCommand("smartProjects.setDisplayMode.statusBar.inactive", () => setDisplayMode("statusBar"))
+    vscode.commands.registerCommand("smartProjects.setDisplayMode.statusBar.inactive", () => setDisplayMode("statusBar")),
+    vscode.commands.registerCommand("smartProjects.setDisplayMode.statusBarTags.active", () => setDisplayMode("statusBarTags")),
+    vscode.commands.registerCommand("smartProjects.setDisplayMode.statusBarTags.inactive", () => setDisplayMode("statusBarTags"))
   );
 
   // ── Initial registration & heartbeat ────────────────────────────────────
@@ -1699,12 +1841,27 @@ export function activate(context: vscode.ExtensionContext): void {
     registerCurrentWorkspace();
   }, HEARTBEAT_INTERVAL_MS);
 
+  // Polling for remote close requests
+  closeCheckTimer = setInterval(() => {
+    const wsPath = getWorkspacePath();
+    if (!wsPath) return;
+    const entries = readState();
+    const entry = entries.find(e => e.absolutePath === wsPath);
+    if (entry && entry.closeRequested) {
+      vscode.commands.executeCommand("workbench.action.closeWindow");
+    }
+  }, 2000);
+
   // Ensure the interval is cleared when the extension host shuts down.
   context.subscriptions.push(
     new vscode.Disposable(() => {
       if (heartbeatTimer) {
         clearInterval(heartbeatTimer);
         heartbeatTimer = undefined;
+      }
+      if (closeCheckTimer) {
+        clearInterval(closeCheckTimer);
+        closeCheckTimer = undefined;
       }
     })
   );
@@ -1723,7 +1880,8 @@ export function activate(context: vscode.ExtensionContext): void {
         e.affectsConfiguration("smartProjects.customColors") ||
         e.affectsConfiguration("smartProjects.pinnedProjects") ||
         e.affectsConfiguration("smartProjects.projectTags") ||
-        e.affectsConfiguration("smartProjects.showGitStatus")
+        e.affectsConfiguration("smartProjects.showGitStatus") ||
+        e.affectsConfiguration("smartProjects.useLanguageIcons")
       ) {
         projectTreeProvider?.refresh();
         recentProjectTreeProvider?.refresh();
@@ -1747,11 +1905,12 @@ export function activate(context: vscode.ExtensionContext): void {
           treeView: "sidebar",
           panel: "panel",
           statusBar: "status bar",
+          statusBarTags: "status bar tags"
         };
         statusBarItem.tooltip = `Show open projects (${modeLabels[mode] ?? mode})`;
 
         // Show or hide dynamic status bar items depending on the mode.
-        if (mode === "statusBar") {
+        if (mode === "statusBar" || mode === "statusBarTags") {
           statusBarItem.hide();
           syncStatusBarItems();
         } else {
@@ -1763,7 +1922,7 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   // ── Bootstrap statusBar mode if it's already the active setting ─────────
-  if (getDisplayMode() === "statusBar") {
+  if (getDisplayMode() === "statusBar" || getDisplayMode() === "statusBarTags") {
     syncStatusBarItems();
   }
 
@@ -1776,6 +1935,10 @@ export function deactivate(): void {
   if (heartbeatTimer) {
     clearInterval(heartbeatTimer);
     heartbeatTimer = undefined;
+  }
+  if (closeCheckTimer) {
+    clearInterval(closeCheckTimer);
+    closeCheckTimer = undefined;
   }
 
   // Clean up dynamic status bar items.

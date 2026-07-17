@@ -2,7 +2,7 @@
   "name": "smart-projects",
   "displayName": "Smart Projects",
   "description": "Displays currently open VS Code projects in the Status Bar and allows quick switching between them.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "andriimishchenko",
   "engines": {
     "vscode": "^1.85.0"
@@ -21,12 +21,13 @@
         "smartProjects.displayMode": {
           "type": "string",
           "default": "quickPick",
-          "enum": ["quickPick", "treeView", "panel", "statusBar"],
+          "enum": ["quickPick", "treeView", "panel", "statusBar", "statusBarTags"],
           "enumDescriptions": [
             "Show projects in a QuickPick dropdown at the top of the window (default)",
             "Show projects in a dedicated sidebar Tree View panel",
             "Show projects in the bottom Panel area (next to Terminal, Output, etc.)",
-            "Show each open project as a separate clickable item in the Status Bar"
+            "Show each open project as a separate clickable item in the Status Bar",
+            "Show tags as status bar items; clicking one opens a QuickPick for that tag"
           ],
           "description": "Controls where the list of open projects is displayed when clicking the Status Bar item."
         },
@@ -34,6 +35,11 @@
           "type": "object",
           "default": {},
           "description": "Custom color overrides for specific projects. Maps project absolute paths to ThemeColor strings."
+        },
+        "smartProjects.useLanguageIcons": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically detect and display language-specific file icons for projects."
         },
         "smartProjects.pinnedProjects": {
           "type": "array",
@@ -139,12 +145,17 @@
       {
         "command": "smartProjects.forgetProject",
         "title": "Forget Project",
-        "icon": "$(close)"
+        "icon": "$(eye-closed)"
       },
       {
         "command": "smartProjects.unforgetProject",
         "title": "Unforget Project",
         "icon": "$(reply)"
+      },
+      {
+        "command": "smartProjects.closeProject",
+        "title": "Close Project",
+        "icon": "$(close)"
       },
       {
         "command": "smartProjects.filterByTag",
@@ -176,6 +187,18 @@
       {
         "command": "smartProjects.setDisplayMode.statusBar.inactive",
         "title": "  Inline Items"
+      },
+      {
+        "command": "smartProjects.setDisplayMode.statusBarTags.active",
+        "title": "✓ Tag Buttons"
+      },
+      {
+        "command": "smartProjects.setDisplayMode.statusBarTags.inactive",
+        "title": "  Tag Buttons"
+      },
+      {
+        "command": "smartProjects.showProjectsByTag",
+        "title": "Smart Projects: Show Projects for Tag"
       }
     ],
     "viewsContainers": {
@@ -298,6 +321,16 @@
           "command": "smartProjects.setDisplayMode.statusBar.inactive",
           "when": "config.smartProjects.displayMode != 'statusBar'",
           "group": "1_modes@2"
+        },
+        {
+          "command": "smartProjects.setDisplayMode.statusBarTags.active",
+          "when": "config.smartProjects.displayMode == 'statusBarTags'",
+          "group": "1_modes@3"
+        },
+        {
+          "command": "smartProjects.setDisplayMode.statusBarTags.inactive",
+          "when": "config.smartProjects.displayMode != 'statusBarTags'",
+          "group": "1_modes@3"
         }
       ],
       "view/item/context": [
@@ -337,9 +370,14 @@
           "group": "inline@3"
         },
         {
+          "command": "smartProjects.closeProject",
+          "when": "viewItem == smartProjectsItem || viewItem == smartProjectsItemPinned",
+          "group": "inline@4"
+        },
+        {
           "command": "smartProjects.forgetProject",
           "when": "viewItem == smartProjectsItem || viewItem == smartProjectsItemPinned || viewItem == recentProjectSelectorItem",
-          "group": "inline@4"
+          "group": "1_modification@4"
         },
         {
           "command": "smartProjects.unforgetProject",
