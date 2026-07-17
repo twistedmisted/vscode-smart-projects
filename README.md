@@ -22,17 +22,22 @@ Instantly see the Git state of your active projects from anywhere.
 ### 📌 Pinning & 🏷️ Tag Groups
 Organize your chaotic list of projects exactly how you want them.
 * **Pinning**: Hover over any project and click the pushpin `$(pin)` icon to permanently anchor it to the top of your lists.
-* **Tagging**: Group related projects into collapsible folders. Click the tag `$(tag)` icon and enter a name (e.g. "Work", "Frontend"). Projects with the same tag are beautifully grouped together in the Sidebar, Bottom Panel, and Quick Pick!
+* **Tagging**: Group related projects into collapsible folders. Click the tag `$(tag)` icon to open the Tag Manager. 
+  * A single project can have **multiple tags** simultaneously!
+  * Select from existing tags or create brand new ones on the fly.
+  * Projects with the same tags are beautifully grouped together in the Sidebar, Bottom Panel, and Quick Pick!
+* **Tag Filtering**: A new filter `$(filter)` button at the top of the Sidebar views allows you to selectively show or hide specific tag groups to keep your view perfectly clean.
 
 ### 🕒 Recent Projects
 A dedicated history pane automatically tracks the last 20 projects you've opened.
 * Shows exact timestamps (e.g. "just now", "2 hours ago").
 * Intelligently hides projects that are already open to save space.
 
-### 🎨 Colorful Indicators
+### 🎨 Colorful & Language-Specific Indicators
 Visually identify your projects at a glance.
-* Assign custom colors to individual projects `$(symbol-color)`.
-* Colors are reflected in the Sidebar (colored telescope icons) and in the Quick Pick (vibrant Unicode emojis).
+* **Language Icons**: The extension automatically detects the primary programming language of your project (e.g., Python, Go, TypeScript) and uses your active VS Code File Icon Theme to display the corresponding logo!
+* **Custom Colors**: If language icons are disabled, you can assign custom colors to individual projects `$(symbol-color)`.
+* **Git Repo Icons**: If a project is untagged and doesn't have a specific language, but tracks a Git repository, it displays a neat `$(repo)` icon!
 
 ### 🙈 Forget Projects (Ignore List)
 Got a stubborn folder you never want to see again?
@@ -51,7 +56,8 @@ Smart Projects is designed for multi-window power users.
 
 Customize the extension's behavior via your VS Code `settings.json`:
 
-* `smartProjects.displayMode`: Choose where the main Project List should appear (`sidebar`, `panel`, or `statusBar`).
+* `smartProjects.displayMode`: Choose where the main Project List should appear (`sidebar`, `panel`, `statusBar`, or the new `statusBarTags` which creates clickable buttons for each tag).
+* `smartProjects.useLanguageIcons`: Automatically detect and display language-specific file icons for projects (default: `true`).
 * `smartProjects.scanDirectories`: An array of folder paths to automatically scan for projects.
 * `smartProjects.showGitStatus`: Toggle the display of git branches and dirty status (default: `true`).
 * `smartProjects.ignoredProjects`: An array of absolute paths that the extension should completely ignore.
