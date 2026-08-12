@@ -2,8 +2,9 @@
   "name": "smart-projects",
   "displayName": "Smart Projects",
   "description": "Displays currently open VS Code projects in the Status Bar and allows quick switching between them.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "andriimishchenko",
+  "icon": "icon.jpg",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -199,6 +200,18 @@
       {
         "command": "smartProjects.showProjectsByTag",
         "title": "Smart Projects: Show Projects for Tag"
+      },
+      {
+        "command": "smartProjects.searchAllProjects",
+        "title": "Smart Projects: Search All Projects",
+        "icon": "$(search)"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "smartProjects.searchAllProjects",
+        "key": "ctrl+shift+o",
+        "mac": "cmd+shift+o"
       }
     ],
     "viewsContainers": {
@@ -273,6 +286,11 @@
           "command": "smartProjects.openNewProject",
           "when": "view == smartProjects.projectList || view == smartProjects.projectListPanel",
           "group": "navigation@0"
+        },
+        {
+          "command": "smartProjects.searchAllProjects",
+          "when": "view == smartProjects.projectList || view == smartProjects.projectListPanel",
+          "group": "navigation@1"
         },
         {
           "command": "smartProjects.addScanDirectory",

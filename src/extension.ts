@@ -1202,6 +1202,106 @@ async function showProjectPicker(filterTag?: string): Promise<void> {
 }
 
 /**
+ * Unified search across all project sources (open, recent, discovered).
+ * Deduplicates by path and lets the user choose to open in current or new window.
+ */
+async function searchAllProjects(): Promise<void> {
+  const entries = getFreshEntries();
+  const recentEntries = getFreshRecentEntries();
+  const discoveredEntries = getFreshDiscoveredEntries();
+  const currentPath = getWorkspacePath();
+  const pinned = getPinnedProjects();
+  const showGit = vscode.workspace.getConfiguration("smartProjects").get<boolean>("showGitStatus", true);
+  const ignoredProjects = vscode.workspace.getConfiguration("smartProjects").get<string[]>("ignoredProjects", []);
+
+  // Deduplicate all projects by absolute path, tracking source
+  const projectMap = new Map<string, { entry: ProjectEntry; sources: string[] }>();
+
+  for (const entry of entries) {
+    if (ignoredProjects.includes(entry.absolutePath)) continue;
+    projectMap.set(entry.absolutePath, { entry, sources: ["Open"] });
+  }
+  for (const entry of recentEntries) {
+    if (ignoredProjects.includes(entry.absolutePath)) continue;
+    const existing = projectMap.get(entry.absolutePath);
+    if (existing) {
+      if (!existing.sources.includes("Recent")) existing.sources.push("Recent");
+    } else {
+      projectMap.set(entry.absolutePath, { entry, sources: ["Recent"] });
+    }
+  }
+  for (const entry of discoveredEntries) {
+    if (ignoredProjects.includes(entry.absolutePath)) continue;
+    const existing = projectMap.get(entry.absolutePath);
+    if (existing) {
+      if (!existing.sources.includes("Discovered")) existing.sources.push("Discovered");
+    } else {
+      projectMap.set(entry.absolutePath, { entry, sources: ["Discovered"] });
+    }
+  }
+
+  if (projectMap.size === 0) {
+    vscode.window.showInformationMessage("Smart Projects: No projects found.");
+    return;
+  }
+
+  // Build QuickPick items
+  const items: vscode.QuickPickItem[] = [];
+
+  for (const [absPath, { entry, sources }] of projectMap) {
+    const isCurrent = absPath === currentPath;
+    const isPinned = pinned.includes(absPath);
+    const tags = getProjectTags(absPath);
+
+    let detail = sources.join(", ");
+    if (tags.length > 0) detail += `  ·  ${tags.map(t => `[${t}]`).join(" ")}`;
+    if (isCurrent) detail += "  ·  ● current";
+    if (isPinned) detail += "  ·  📌";
+    if (showGit && entry.gitBranch) {
+      detail += `  ·  ${entry.gitBranch}${entry.gitDirty ? "*" : ""}`;
+    }
+
+    items.push({
+      label: entry.displayName,
+      description: absPath,
+      detail
+    });
+  }
+
+  const selected = await vscode.window.showQuickPick(items, {
+    placeHolder: "Search all projects…",
+    matchOnDescription: true,
+    matchOnDetail: true
+  });
+
+  if (!selected || !selected.description) return;
+
+  const targetPath = selected.description;
+
+  if (targetPath === currentPath) {
+    vscode.window.showInformationMessage("You are already in this project.");
+    return;
+  }
+
+  // Ask how to open
+  const openChoice = await vscode.window.showQuickPick(
+    [
+      { label: "$(empty-window) Open in New Window", value: "new" },
+      { label: "$(window) Open in Current Window", value: "current" }
+    ],
+    { placeHolder: `How do you want to open "${selected.label}"?` }
+  );
+
+  if (!openChoice) return;
+
+  if (openChoice.value === "current") {
+    openProjectInCurrentWindow(targetPath);
+  } else {
+    openProjectByPath(targetPath);
+  }
+}
+
+/**
  * Opens a project folder in a new window, or shows a message if it's
  * already the current workspace.
  */
@@ -1625,6 +1725,10 @@ export function activate(context: vscode.ExtensionContext): void {
       (tag?: string) => {
         if (tag) showProjectPicker(tag);
       }
+    ),
+    vscode.commands.registerCommand(
+      "smartProjects.searchAllProjects",
+      searchAllProjects
     )
   );
 

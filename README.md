@@ -45,6 +45,14 @@ Got a stubborn folder you never want to see again?
 * The project instantly vanishes and will *never* appear in your Open, Recent, or Discovered lists again.
 * If you make a mistake, restore it from the **"Ignored Projects"** panel using the Unforget `$(reply)` button!
 
+### 🔍 Search All Projects
+Instantly find any project across all sources with a single keystroke.
+* Press `Cmd+Shift+O` (Mac) / `Ctrl+Shift+O` (Windows/Linux) to open the unified search.
+* Searches across **Open**, **Recent**, and **Discovered** projects simultaneously.
+* Results are deduplicated and show source, tags, git branch, and pin status.
+* After selecting a project, choose to open it in the **current window** or a **new window**.
+* Also available via the `$(search)` icon in the sidebar and from the Command Palette.
+
 ### 🌍 Global Synchronization
 Smart Projects is designed for multi-window power users.
 * Powered by a hidden, globally shared `state.json` file.
@@ -70,6 +78,7 @@ Customize the extension's behavior via your VS Code `settings.json`:
 ## 🚀 Commands
 
 Access these from the Command Palette (`Cmd+Shift+P` / `Ctrl+Shift+P`):
+* `Smart Projects: Search All Projects` - Unified search across all project sources. (`Cmd+Shift+O` / `Ctrl+Shift+O`)
 * `Smart Projects: Show Open Projects` - Opens the ultimate global Quick Pick launcher.
 * `Smart Projects: Open New Project...` - Opens your OS file browser to load a new folder.
 * `Smart Projects: Set Project Color` - Apply a custom color to a project.
